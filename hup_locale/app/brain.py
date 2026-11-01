@@ -57,6 +57,7 @@ class Brain:
         self._motion_due: dict[str, float] = {}
         self._voice_wait: dict[str, float] = {}  # task_id -> scadenza attesa risposta vocale
         self._last_app_task: str | None = None
+        self._seen: dict[str, float] = {}  # stanza -> quando la telecamera ha visto Dario
         for room in cfg.rooms:
             self.mem.goal(room.name, room.goal)
 
@@ -180,6 +181,7 @@ class Brain:
             return {"esito": "invariata"}
         self.mem.set(f"thumb:{room.name}", fp)
 
+        t0 = time.monotonic()
         result = await self.llm.vision_json(
             prompts.check_system(self.cfg.assistant_name, self.cfg.personality),
             prompts.check_prompt(
@@ -188,7 +190,10 @@ class Brain:
             [shrink(img)],
             prompts.CHECK_SCHEMA,
         )
-        log.info("Controllo %s (%s): %s", room.name, reason, result.get("descrizione"))
+        log.info("Controllo %s (%s, AI %.1fs): %s", room.name, reason, time.monotonic() - t0,
+                 result.get("descrizione"))
+        if result.get("persona_presente"):
+            self._seen[room.name] = now
         if not result.get("immagine_utile", True):
             self.mem.log("controllo", "Immagine non utilizzabile", room.name)
             for t in open_tasks:  # riprovo più tardi senza contare un promemoria
@@ -231,31 +236,86 @@ class Brain:
         await self._say(task, message, interactive=True)
 
     # ------------------------------------------------------------------ consegna messaggi
-    async def satellite_near(self) -> str | None:
-        """Il satellite vocale vicino a Dario: movimento attivo o recente nei suoi sensori."""
-        horizon = self.cfg.voice_presence_minutes * 60
-        for sat in self.cfg.satellites:
-            sat_state = await self.ha.state(sat.entity)
-            if sat_state in (None, "unavailable", "unknown"):
-                continue
-            for sensor in sat.motion:
-                s = await self.ha.get_state(sensor)
-                if not s:
-                    continue
-                if s["state"] == "on":
-                    return sat.entity
-                changed = datetime.fromisoformat(s["last_changed"]).timestamp()
-                if s["state"] == "off" and self.clock() - changed <= horizon:
-                    return sat.entity
+    async def _recent(self, entity: str | None) -> float | None:
+        """Quando il sensore ha visto movimento l'ultima volta (adesso se è attivo), entro la finestra utile."""
+        if not entity:
+            return None
+        st = await self.ha.get_state(entity)
+        if not st:
+            return None
+        now = self.clock()
+        if st["state"] == "on":
+            return now
+        if st["state"] == "off":
+            changed = datetime.fromisoformat(st["last_changed"]).timestamp()
+            if now - changed <= self.cfg.voice_presence_minutes * 60:
+                return changed
         return None
 
+    async def _usable(self, entity: str | None) -> bool:
+        if not entity:
+            return False
+        if entity.startswith("notify."):
+            return True  # i servizi notify non hanno stato: in caso di errore ripiego sull'app
+        return await self.ha.state(entity) not in (None, "unavailable", "unknown")
+
+    async def locate(self) -> tuple[str, str] | None:
+        """Dove parlare a Dario: ("satellite", entità) o ("speaker", entità), in base a dove si trova."""
+        candidates: list[tuple[float, str, str]] = []
+        for sat in self.cfg.satellites:
+            for sensor in sat.motion:
+                ts = await self._recent(sensor)
+                if ts is not None:
+                    candidates.append((ts, "satellite", sat.entity))
+        horizon = self.cfg.voice_presence_minutes * 60
+        for room in self.cfg.rooms:
+            times = [await self._recent(room.motion)]
+            seen = self._seen.get(room.name)
+            if seen and self.clock() - seen <= horizon:
+                times.append(seen)
+            ts = max((t for t in times if t is not None), default=None)
+            if ts is None:
+                continue
+            if room.satellite:
+                candidates.append((ts, "satellite", room.satellite))
+            elif room.speaker:
+                candidates.append((ts, "speaker", room.speaker))
+        for _ts, kind, entity in sorted(candidates, reverse=True):
+            if await self._usable(entity):
+                return kind, entity
+        return None
+
+    async def satellite_near(self) -> str | None:
+        where = await self.locate()
+        return where[1] if where and where[0] == "satellite" else None
+
     async def _say(self, task: Task, message: str, interactive: bool) -> None:
-        sat = await self.satellite_near()
-        if sat:
-            ok = await self._voice(sat, task, message, interactive)
-            if ok:
+        where = await self.locate()
+        if where and where[0] == "satellite":
+            if await self._voice(where[1], task, message, interactive):
                 return
+        if where and where[0] == "speaker":
+            spoke = await self._speak(where[1], message)
+            if spoke:
+                self.mem.log("voce", message, task.room)
+                if not interactive:
+                    return
+                # L'altoparlante non ascolta: la risposta arriva dai pulsanti della notifica.
         await self._app(task, message, interactive)
+
+    async def _speak(self, speaker: str, message: str) -> bool:
+        try:
+            if speaker.startswith("notify."):
+                await self.ha.call_service("notify", speaker.split(".", 1)[1],
+                                           {"message": message, "data": {"type": "announce"}})
+            else:
+                await self.ha.call_service("tts", "speak", {"entity_id": self.cfg.tts_entity,
+                                                            "media_player_entity_id": speaker,
+                                                            "message": message})
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Altoparlante %s non disponibile: %s", speaker, exc)
+            return False
 
     async def _voice(self, sat: str, task: Task, message: str, interactive: bool) -> bool:
         try:

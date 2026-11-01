@@ -1,5 +1,5 @@
 name: Hup locale
-version: "0.1.2"
+version: "0.2.0"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
 url: https://github.com/dariomartino/hupdario
@@ -32,6 +32,7 @@ options:
     - name: Cucina
       camera: camera.cucina
       motion: binary_sensor.motion_cucina_xiaomi_occupancy
+      speaker: media_player.nestmini6311_2
       goal: >-
         Cucina in ordine e pulita: piani di lavoro e tavolo liberi, niente piatti o pentole
         sporche fuori dalla lavastoviglie o dal lavello, niente cibo lasciato fuori dal frigo,
@@ -45,16 +46,19 @@ options:
     - name: Camera da letto
       camera: camera.letto
       motion: binary_sensor.motion_letto_dx_occupancy
+      satellite: assist_satellite.vaca_a6e7e87e1
       goal: >-
         Camera da letto in ordine: letto rifatto dopo che mi sono alzato, vestiti nell'armadio
         o nel cesto, comodini sgombri, niente tazze o bicchieri lasciati in giro.
     - name: Stanza degli ospiti
       camera: camera.ospiti
+      speaker: notify.alexa_media_echo_show_ospiti
       goal: >-
         Stanza degli ospiti ordinata e pronta: niente oggetti accumulati su letto, sedie o
         pavimento, non deve diventare un ripostiglio.
     - name: Studio
       camera: camera.studio
+      speaker: notify.alexa_media_echo_studio
       goal: >-
         Studio ordinato: scrivania sgombra a fine giornata, cavi e attrezzi riposti, niente
         tazze o piatti dimenticati, carte in pila o archiviate.
@@ -68,6 +72,7 @@ options:
         - binary_sensor.motion_sala_xiaomi_occupancy
   feedback_script: script.hup_risposta
   notify_service: notify.mobile_app_xiaomi_15t_pro
+  tts_entity: tts.google_ai_tts
   telegram_bot_token: ""
   telegram_chat_id: ""
   check_interval_minutes: 30
@@ -97,6 +102,8 @@ schema:
     - name: str
       camera: str
       motion: str?
+      satellite: str?
+      speaker: str?
       goal: str
   satellites:
     - entity: str
@@ -104,6 +111,7 @@ schema:
         - str
   feedback_script: str
   notify_service: str?
+  tts_entity: str
   telegram_bot_token: password?
   telegram_chat_id: str?
   check_interval_minutes: int(5,600)

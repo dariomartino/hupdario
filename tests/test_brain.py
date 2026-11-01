@@ -22,8 +22,10 @@ OPTIONS = {
     "privacy_entity": "input_boolean.privacy", "max_open_tasks": 1,
     "quiet_hours_start": "23:30", "quiet_hours_end": "07:00", "timezone": "Europe/Rome",
     "rooms": [{"name": "Cucina", "camera": "camera.cucina", "motion": "binary_sensor.motion_cucina",
+               "speaker": "media_player.nest_cucina",
                "goal": "Cucina in ordine"},
-              {"name": "Studio", "camera": "camera.studio", "goal": "Studio in ordine"}],
+              {"name": "Studio", "camera": "camera.studio", "goal": "Studio in ordine",
+               "speaker": "notify.alexa_media_echo_studio"}],
     "satellites": [{"entity": "assist_satellite.letto", "motion": ["binary_sensor.motion_letto"]}],
     "feedback_script": "script.hup_risposta", "notify_service": "notify.mobile_app_tel",
     "check_interval_minutes": 30, "min_minutes_between_checks": 10, "motion_cleared_minutes": 3,
@@ -55,7 +57,8 @@ class FakeHA:
         self.states = {"person.dario": "home", "input_boolean.hup_dormo": "off",
                        "assist_satellite.letto": "idle", "binary_sensor.motion_letto": "off",
                        "binary_sensor.motion_cucina": "off", "input_boolean.privacy": "off",
-                       "camera.cucina": "idle", "camera.studio": "unavailable"}
+                       "camera.cucina": "idle", "camera.studio": "unavailable",
+                       "media_player.nest_cucina": "idle"}
         self.changed = {"binary_sensor.motion_letto": 0}
         self.calls = []
         self.image = jpeg((200, 200, 200))
@@ -314,3 +317,45 @@ async def test_telecamera_spenta_saltata_e_limite_compiti_in_casa(env):
     llm.vision_results = [tutto_ok()]  # se lo chiedo io, guarda comunque
     await brain.check_room(brain.cfg.room("studio"), "richiesta", force=True)
     assert len(llm.prompts) == 2
+
+
+@pytest.mark.asyncio
+async def test_parla_dall_altoparlante_della_stanza_dove_la_telecamera_ti_vede(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["camera.studio"] = "idle"
+    ha.states["camera.cucina"] = "unavailable"
+    res = nuovo("Raccogli le scatole dal pavimento", "Quelle scatole per terra le sistemiamo?")
+    res["persona_presente"] = True
+    llm.vision_results = [res]
+    await brain.tick()
+    assert ha.names() == ["notify.alexa_media_echo_studio", "notify.mobile_app_tel"]
+    assert ha.calls[0][2] == {"message": "Quelle scatole per terra le sistemiamo?", "data": {"type": "announce"}}
+    assert "actions" in ha.calls[1][2]["data"]
+
+
+@pytest.mark.asyncio
+async def test_movimento_in_cucina_usa_il_nest_e_complimenti_solo_a_voce(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["binary_sensor.motion_cucina"] = "on"
+    llm.vision_results = [nuovo()]
+    await brain.tick()
+    task = mem.open_tasks()[0]
+    assert ha.calls[0][:2] == ("tts", "speak")
+    assert ha.calls[0][2]["media_player_entity_id"] == "media_player.nest_cucina"
+    await brain.feedback(task.id, "fatto", canale="app")
+    clock.advance(2)
+    n = len(ha.calls)
+    llm.vision_results = [tutto_ok([{"task_id": task.id, "completato": True, "messaggio": "Bravo!"}])]
+    await brain.tick()
+    assert [c[:2] for c in ha.calls[n:]] == [("tts", "speak")]
+
+
+def test_stanze_salvate_ricevono_i_nuovi_campi_predefiniti():
+    saved = {"rooms": [{"name": "Studio", "camera": "camera.studio", "goal": "x"},
+                       {"name": "Cucina", "camera": "camera.cucina", "goal": "x", "speaker": "none"}]}
+    shipped = config._shipped_rooms()
+    assert shipped["studio"]["speaker"] == "notify.alexa_media_echo_studio"
+    o = config.fill_room_defaults(saved, shipped)
+    assert o["rooms"][0]["speaker"] == "notify.alexa_media_echo_studio"
+    assert o["rooms"][1]["speaker"] is None
+    assert o["rooms"][1]["motion"] == "binary_sensor.motion_cucina_xiaomi_occupancy"

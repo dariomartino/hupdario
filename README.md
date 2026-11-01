@@ -12,8 +12,10 @@ e verifica da solo quando hai finito.
   Se la stanza non è cambiata dall'ultima volta non chiama nemmeno l'AI.
 - **Cosa fa:** propone al massimo un compito per stanza. Poi ricontrolla: se l'hai fatto ti fa i
   complimenti, altrimenti ti ricorda con gentilezza (fino a `max_reminders` volte, poi lascia perdere).
-- **Dove ti parla:** se c'è movimento vicino a un satellite vocale avvia un dialogo lì; altrimenti
-  manda una notifica all'app con i pulsanti *Fatto*, *Dopo* e *Rispondi*. Telegram è la chat libera.
+- **Dove ti parla:** capisce dove sei dai sensori di movimento e da ciò che vede la telecamera. Se in
+  quella stanza c'è un satellite vocale avvia un dialogo; se c'è un altoparlante (Echo o Google Nest)
+  te lo dice a voce e ti manda la notifica con i pulsanti *Fatto*, *Dopo* e *Rispondi*; altrimenti
+  solo la notifica. Telegram è la chat libera.
 - **Memoria:** ricorda i compiti, le tue risposte e le eccezioni ("lo stendino sta lì apposta").
   Quando dici che una cosa va bene così, diventa una regola e non te la ripropone.
 
@@ -50,7 +52,7 @@ Già creati durante la configurazione:
 
 | Opzione | Significato |
 |---|---|
-| `rooms` | Stanze da seguire: nome, telecamera, sensore di movimento, obiettivo in linguaggio naturale |
+| `rooms` | Stanze da seguire: nome, telecamera, sensore di movimento, satellite vocale o altoparlante (`notify.alexa_media_…` oppure `media_player.…`; `none` per disattivarlo), obiettivo in linguaggio naturale |
 | `satellites` | Satelliti vocali e i sensori di movimento che dicono se sei lì vicino |
 | `check_interval_minutes` | Ogni quanto ricontrollare una stanza (se è cambiata) |
 | `max_open_tasks` | Quanti compiti al massimo possono essere aperti in tutta la casa |

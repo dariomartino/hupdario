@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /opt/hup
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+COPY config.yaml .
 COPY app ./app
 
 CMD ["python", "-m", "app.main"]

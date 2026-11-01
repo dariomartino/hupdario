@@ -5,6 +5,7 @@ CHECK_SCHEMA = {
     "type": "object",
     "properties": {
         "descrizione": {"type": "string", "description": "Cosa si vede nella stanza, in una frase."},
+        "persona_presente": {"type": "boolean", "description": "true se nella foto si vede una persona."},
         "immagine_utile": {"type": "boolean",
                            "description": "false se l'immagine è buia, sfocata, coperta o non mostra la stanza."},
         "verifiche": {
@@ -34,7 +35,7 @@ CHECK_SCHEMA = {
             "required": ["presente", "compito", "messaggio"],
         },
     },
-    "required": ["descrizione", "immagine_utile", "verifiche", "nuovo_compito"],
+    "required": ["descrizione", "persona_presente", "immagine_utile", "verifiche", "nuovo_compito"],
 }
 
 LOOK_SCHEMA = {

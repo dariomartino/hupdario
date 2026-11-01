@@ -14,6 +14,8 @@ class Room:
     camera: str
     goal: str
     motion: str | None = None
+    satellite: str | None = None
+    speaker: str | None = None
 
 
 @dataclass
@@ -41,6 +43,7 @@ class Config:
     satellites: list[Satellite]
     feedback_script: str
     notify_service: str | None
+    tts_entity: str
     telegram_bot_token: str
     telegram_chat_id: str
     check_interval_minutes: int
@@ -67,16 +70,47 @@ def _parse_time(value: str) -> time:
     return time(int(hh), int(mm))
 
 
+DEFAULTS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
+
+
+def _shipped_rooms() -> dict[str, dict]:
+    """Le stanze predefinite della versione installata (da config.yaml), per nome."""
+    try:
+        import yaml  # noqa: PLC0415
+        with open(DEFAULTS_PATH, encoding="utf-8") as fh:
+            rooms = yaml.safe_load(fh)["options"]["rooms"]
+        return {r["name"].lower(): r for r in rooms}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def fill_room_defaults(o: dict, shipped: dict[str, dict]) -> dict:
+    """Completa le stanze salvate con i campi nuovi delle versioni successive (es. altoparlanti).
+
+    Un campo scritto dall'utente vince sempre; il valore "none" lo disattiva.
+    """
+    for room in o.get("rooms", []):
+        base = shipped.get(str(room.get("name", "")).lower(), {})
+        for key in ("motion", "satellite", "speaker"):
+            if not room.get(key) and base.get(key):
+                room[key] = base[key]
+            if str(room.get(key, "")).lower() == "none":
+                room[key] = None
+    return o
+
+
 def load(path: str | None = None) -> Config:
     path = path or os.environ.get("HUP_OPTIONS", "/data/options.json")
     with open(path, encoding="utf-8") as fh:
         o = json.load(fh)
+    o = fill_room_defaults(o, _shipped_rooms())
     return from_dict(o, data_dir=os.environ.get("HUP_DATA_DIR", os.path.dirname(path) or "/data"))
 
 
 def from_dict(o: dict, data_dir: str = "/data") -> Config:
     rooms = [
-        Room(name=r["name"], camera=r["camera"], goal=r.get("goal", ""), motion=r.get("motion") or None)
+        Room(name=r["name"], camera=r["camera"], goal=r.get("goal", ""), motion=r.get("motion") or None,
+             satellite=r.get("satellite") or None, speaker=r.get("speaker") or None)
         for r in o.get("rooms", [])
     ]
     sats = [Satellite(entity=s["entity"], motion=list(s.get("motion") or [])) for s in o.get("satellites", [])]
@@ -98,6 +132,7 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         satellites=sats,
         feedback_script=o.get("feedback_script", "script.hup_risposta"),
         notify_service=o.get("notify_service") or None,
+        tts_entity=o.get("tts_entity", "tts.google_ai_tts"),
         telegram_bot_token=o.get("telegram_bot_token", "") or "",
         telegram_chat_id=str(o.get("telegram_chat_id", "") or ""),
         check_interval_minutes=int(o.get("check_interval_minutes", 30)),
