@@ -62,6 +62,8 @@ class Config:
     postpone_minutes: int
     max_reminders: int
     max_open_tasks: int
+    postpone_entity: str | None
+    max_tasks_entity: str | None
     voice_presence_minutes: int
     voice_reply_timeout_minutes: int
     data_dir: str = "/data"
@@ -167,6 +169,8 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         postpone_minutes=int(o.get("postpone_minutes", 60)),
         max_reminders=int(o.get("max_reminders", 3)),
         max_open_tasks=int(o.get("max_open_tasks", 2)),
+        postpone_entity=o.get("postpone_entity", "input_number.hup_rimanda_minuti") or None,
+        max_tasks_entity=o.get("max_tasks_entity", "input_number.hup_compiti_massimi") or None,
         voice_presence_minutes=int(o.get("voice_presence_minutes", 10)),
         voice_reply_timeout_minutes=int(o.get("voice_reply_timeout_minutes", 3)),
         data_dir=data_dir,

@@ -93,6 +93,23 @@ class Brain:
             return False, "fascia di silenzio"
         return True, "in casa e sveglio"
 
+    async def _number(self, entity: str | None, fallback: int) -> int:
+        """Valore regolabile da Home Assistant (input_number), con ripiego sulle opzioni dell'app."""
+        if entity:
+            try:
+                value = await self.ha.state(entity)
+                if value not in (None, "unknown", "unavailable"):
+                    return int(float(value))
+            except Exception:  # noqa: BLE001
+                pass
+        return fallback
+
+    async def postpone_minutes(self) -> int:
+        return await self._number(self.cfg.postpone_entity, self.cfg.postpone_minutes)
+
+    async def max_open_tasks(self) -> int:
+        return await self._number(self.cfg.max_tasks_entity, self.cfg.max_open_tasks)
+
     async def privacy_on(self) -> bool:
         return bool(self.cfg.privacy_entity) and await self.ha.state(self.cfg.privacy_entity) == "on"
 
@@ -164,7 +181,7 @@ class Brain:
     async def _check_room(self, room: Room, reason: str, force: bool) -> dict:
         now = self.clock()
         open_tasks = self.mem.open_tasks(room.name)
-        allow_new = force or len(self.mem.open_tasks()) < self.cfg.max_open_tasks
+        allow_new = force or len(self.mem.open_tasks()) < await self.max_open_tasks()
         if not open_tasks and not allow_new:
             # Ci sono già abbastanza compiti aperti in casa: non serve nemmeno guardare.
             self.mem.set(f"last_check:{room.name}", now)
@@ -448,7 +465,7 @@ class Brain:
         elif esito == "fatto":
             self.mem.update_task(task.id, status="da_verificare", next_action_at=now + 90, note=nota or None)
         elif esito == "dopo":
-            self.mem.update_task(task.id, next_action_at=now + self.cfg.postpone_minutes * 60,
+            self.mem.update_task(task.id, next_action_at=now + await self.postpone_minutes() * 60,
                                  note=nota or task.note)
         elif esito == "non_serve":
             self.mem.update_task(task.id, status="non_serve", next_action_at=now, note=nota or None)

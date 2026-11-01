@@ -1,5 +1,5 @@
 name: Hup locale
-version: "0.4.0"
+version: "0.4.1"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
 url: https://github.com/dariomartino/hupdario
@@ -94,9 +94,11 @@ options:
   min_minutes_between_checks: 10
   motion_cleared_minutes: 3
   reminder_minutes: 30
-  postpone_minutes: 60
+  postpone_minutes: 20
+  postpone_entity: input_number.hup_rimanda_minuti
   max_reminders: 3
-  max_open_tasks: 2
+  max_open_tasks: 4
+  max_tasks_entity: input_number.hup_compiti_massimi
   voice_presence_minutes: 10
   voice_reply_timeout_minutes: 3
 schema:
@@ -139,7 +141,9 @@ schema:
   motion_cleared_minutes: int(0,60)
   reminder_minutes: int(5,600)
   postpone_minutes: int(5,600)
+  postpone_entity: str?
   max_reminders: int(0,10)
   max_open_tasks: int(1,10)
+  max_tasks_entity: str?
   voice_presence_minutes: int(1,120)
   voice_reply_timeout_minutes: int(1,30)

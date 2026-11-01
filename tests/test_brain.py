@@ -412,3 +412,16 @@ async def test_si_lo_faccio_ricontrolla_dopo_dieci_minuti_senza_insistere(env):
     llm.vision_results = [tutto_ok([{"task_id": task.id, "completato": True, "messaggio": "Ottimo"}])]
     await brain.tick()
     assert mem.task(task.id).status == "fatto"
+
+
+@pytest.mark.asyncio
+async def test_rimanda_e_limite_regolabili_da_home_assistant(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["input_number.hup_rimanda_minuti"] = "20.0"
+    ha.states["input_number.hup_compiti_massimi"] = "4.0"
+    assert await brain.postpone_minutes() == 20 and await brain.max_open_tasks() == 4
+    llm.vision_results = [nuovo()]
+    await brain.tick()
+    task = mem.open_tasks()[0]
+    await brain.feedback(task.id, "dopo")
+    assert mem.task(task.id).next_action_at == clock() + 20 * 60
