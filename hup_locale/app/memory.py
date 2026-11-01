@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import sqlite3
 import time
@@ -151,6 +152,7 @@ class Memory:
 
     # ---------- diario ----------
     def log(self, kind: str, text: str, room: str | None = None) -> None:
+        logging.getLogger("hup.diario").info("[%s] %s%s", kind, f"{room}: " if room else "", text)
         self.db.execute("INSERT INTO events (ts, kind, room, text) VALUES (?, ?, ?, ?)",
                         (self.clock(), kind, room, text))
         self.db.execute("DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 2000)")

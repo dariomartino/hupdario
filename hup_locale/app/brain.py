@@ -57,6 +57,7 @@ class Brain:
         self._motion_due: dict[str, float] = {}
         self._voice_wait: dict[str, float] = {}  # task_id -> scadenza attesa risposta vocale
         self._last_app_task: str | None = None
+        self._bg: set[asyncio.Task] = set()
         self._seen: dict[str, float] = {}  # stanza -> quando la telecamera ha visto Dario
         for room in cfg.rooms:
             self.mem.goal(room.name, room.goal)
@@ -166,6 +167,7 @@ class Brain:
             # Ci sono già abbastanza compiti aperti in casa: non serve nemmeno guardare.
             self.mem.set(f"last_check:{room.name}", now)
             return {"esito": "in_attesa", "dettaglio": "troppi compiti già aperti in casa"}
+        log.info("Guardo %s (%s)", room.name, reason)
         try:
             img = await self.ha.camera_snapshot(room.camera)
         except Exception as exc:  # noqa: BLE001
@@ -361,9 +363,9 @@ class Brain:
                     "preannounce": True,
                 }
                 self._voice_wait[task.id] = self.clock() + self.cfg.voice_reply_timeout_minutes * 60
-                asyncio.create_task(self._fire("assist_satellite", "start_conversation", data))
+                self._spawn(self._fire("assist_satellite", "start_conversation", data))
             else:
-                asyncio.create_task(self._fire("assist_satellite", "announce",
+                self._spawn(self._fire("assist_satellite", "announce",
                                                {"entity_id": sat, "message": message, "preannounce": True}))
             self.mem.update_task(task.id, channel="voce")
             self.mem.log("voce", message, task.room)
@@ -372,6 +374,11 @@ class Brain:
             self._voice_wait.pop(task.id, None)
             log.warning("Voce non disponibile (%s)", exc)
             return False
+
+    def _spawn(self, coro) -> None:
+        task = asyncio.create_task(coro)
+        self._bg.add(task)
+        task.add_done_callback(self._bg.discard)
 
     async def _fire(self, domain: str, service: str, data: dict) -> None:
         try:

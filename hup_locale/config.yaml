@@ -1,5 +1,5 @@
 name: Hup locale
-version: "0.3.0"
+version: "0.3.1"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
 url: https://github.com/dariomartino/hupdario

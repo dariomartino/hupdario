@@ -28,6 +28,7 @@ class HAClient:
         self.token = token
         self.session = session
         self._handlers: dict[str, list[EventHandler]] = {}
+        self._tasks: set[asyncio.Task] = set()  # riferimenti forti: altrimenti i task possono sparire
 
     @property
     def _headers(self) -> dict:
@@ -101,8 +102,13 @@ class HAClient:
                 if data.get("type") != "event":
                     continue
                 event = data["event"]
-                for h in self._handlers.get(event.get("event_type"), []):
-                    asyncio.create_task(self._safe(h, event))
+                etype = event.get("event_type")
+                if etype != "state_changed":
+                    log.info("Evento ricevuto: %s %s", etype, event.get("data"))
+                for h in self._handlers.get(etype, []):
+                    task = asyncio.create_task(self._safe(h, event))
+                    self._tasks.add(task)
+                    task.add_done_callback(self._tasks.discard)
 
     @staticmethod
     async def _safe(handler: EventHandler, event: dict) -> None:
