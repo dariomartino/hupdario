@@ -51,7 +51,14 @@ class TelegramBot:
 
     async def run(self) -> None:
         offset = int(self.mem.get("telegram_offset", 0))
-        log.info("Bot Telegram avviato")
+        try:
+            me = await self._call("getMe")
+            # Un bot usato in passato può avere un webhook attivo, che blocca la ricezione dei messaggi.
+            await self._call("deleteWebhook", json={"drop_pending_updates": False})
+            log.info("Bot Telegram @%s avviato", me.get("username"))
+        except Exception as exc:  # noqa: BLE001
+            log.error("Bot Telegram non utilizzabile (token errato?): %s", exc)
+            return
         while True:
             try:
                 updates = await self._call("getUpdates", json={"offset": offset, "timeout": 50,
