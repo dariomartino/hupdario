@@ -31,6 +31,16 @@ def thumb(img: bytes) -> list[int]:
         return list(im.convert("L").resize((16, 16)).tobytes())
 
 
+def shrink(img: bytes, max_side: int = 1280) -> bytes:
+    """Riduce la foto prima di mandarla all'AI: molto più veloce e costa meno, i dettagli bastano."""
+    with Image.open(io.BytesIO(img)) as im:
+        im = im.convert("RGB")
+        im.thumbnail((max_side, max_side))
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=80)
+        return out.getvalue()
+
+
 def thumb_diff(a: list[int] | None, b: list[int] | None) -> float:
     if not a or not b or len(a) != len(b):
         return 255.0
@@ -105,21 +115,32 @@ class Brain:
             self.mem.set("last_unavailable_reason", None)
             self.mem.log("pausa", "Di nuovo attivo")
         for room in self.cfg.rooms:
-            if not await self.camera_ok(room):
-                continue
-            due_tasks = [t for t in self.mem.open_tasks(room.name)
-                         if t.next_action_at <= now and t.id not in self._voice_wait]
-            since_last = now - self._last_check(room.name)
-            motion_at = self._motion_due.get(room.name)
-            if due_tasks:
-                await self.check_room(room, "verifica")
-            elif since_last < self.cfg.min_minutes_between_checks * 60:
-                continue
-            elif motion_at and motion_at <= now:
-                self._motion_due.pop(room.name, None)
-                await self.check_room(room, "movimento")
-            elif since_last >= self.cfg.check_interval_minutes * 60:
-                await self.check_room(room, "periodico")
+            try:
+                await self._tick_room(room, now)
+            except Exception as exc:  # noqa: BLE001  una stanza in errore non ferma le altre
+                log.warning("Controllo %s non riuscito: %r", room.name, exc)
+                self.mem.log("errore", f"Controllo non riuscito: {exc!r}"[:300], room.name)
+                self.mem.set(f"last_check:{room.name}", now)
+                for t in self.mem.open_tasks(room.name):  # riprova tra 5 minuti, non a raffica
+                    if t.next_action_at <= now:
+                        self.mem.update_task(t.id, next_action_at=now + 300)
+
+    async def _tick_room(self, room: Room, now: float) -> None:
+        if not await self.camera_ok(room):
+            return
+        due_tasks = [t for t in self.mem.open_tasks(room.name)
+                     if t.next_action_at <= now and t.id not in self._voice_wait]
+        since_last = now - self._last_check(room.name)
+        motion_at = self._motion_due.get(room.name)
+        if due_tasks:
+            await self.check_room(room, "verifica")
+        elif since_last < self.cfg.min_minutes_between_checks * 60:
+            return
+        elif motion_at and motion_at <= now:
+            self._motion_due.pop(room.name, None)
+            await self.check_room(room, "movimento")
+        elif since_last >= self.cfg.check_interval_minutes * 60:
+            await self.check_room(room, "periodico")
 
     async def run(self) -> None:
         while True:
@@ -164,7 +185,7 @@ class Brain:
             prompts.check_prompt(
                 room.name, self.goal(room), self.mem.rules(room.name), [t.as_dict() for t in open_tasks],
                 [t.as_dict() for t in self.mem.recent_closed(room.name)], self.now_text()),
-            [img],
+            [shrink(img)],
             prompts.CHECK_SCHEMA,
         )
         log.info("Controllo %s (%s): %s", room.name, reason, result.get("descrizione"))
@@ -409,7 +430,7 @@ class Brain:
             res = await self.llm.vision_json(
                 prompts.check_system(self.cfg.assistant_name, self.cfg.personality),
                 f"Stanza {room.name}. Domanda di Dario: {args.get('domanda', 'Cosa vedi?')}",
-                [img], prompts.LOOK_SCHEMA)
+                [shrink(img)], prompts.LOOK_SCHEMA)
             if args.get("invia_foto") and source == "telegram" and self.telegram_photo:
                 await self.telegram_photo(img, room.name)
             return res

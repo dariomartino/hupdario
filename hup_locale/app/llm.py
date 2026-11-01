@@ -59,17 +59,34 @@ class LLM:
 class GeminiLLM(LLM):
     URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
+    # Ragionamento ridotto al minimo per avere risposte rapide. I modelli Gemini 3 usano
+    # thinkingLevel, i 2.5 thinkingBudget: provo nell'ordine e ricordo quello accettato.
+    THINKING = [{"thinkingLevel": "low"}, {"thinkingBudget": 0}, None]
+
     def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str):
         self.session, self.key, self.model = session, api_key, model
+        self._thinking = 0
 
     async def _post(self, body: dict) -> dict:
-        async with self.session.post(
-            self.URL.format(model=self.model),
-            headers={"x-goog-api-key": self.key, "Content-Type": "application/json"},
-            json=body,
-            timeout=aiohttp.ClientTimeout(total=90),
-        ) as r:
-            data = await r.json(content_type=None)
+        while True:
+            thinking = self.THINKING[self._thinking]
+            payload = dict(body)
+            gen = dict(payload.get("generationConfig", {}))
+            if thinking:
+                gen["thinkingConfig"] = thinking
+            if gen:
+                payload["generationConfig"] = gen
+            async with self.session.post(
+                self.URL.format(model=self.model),
+                headers={"x-goog-api-key": self.key, "Content-Type": "application/json"},
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=120),
+            ) as r:
+                data = await r.json(content_type=None)
+            if r.status == 400 and thinking and "think" in json.dumps(data).lower():
+                self._thinking += 1
+                log.info("Gemini non accetta %s, provo l'alternativa", thinking)
+                continue
             if r.status >= 400:
                 raise LLMError(f"Gemini {r.status}: {json.dumps(data)[:400]}")
             return data

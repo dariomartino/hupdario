@@ -32,7 +32,7 @@ async def test_gemini_vision_e_chat_con_strumenti():
     async def handler(req):
         body = await req.json()
         seen.append(body)
-        if "generationConfig" in body:
+        if "responseSchema" in body.get("generationConfig", {}):
             assert body["generationConfig"]["responseSchema"]["type"] == "OBJECT"
             assert "inline_data" in body["contents"][0]["parts"][1]
             return web.json_response({"candidates": [{"content": {"parts": [{"text": '{"risposta": "ok"}'}]}}]})
@@ -89,5 +89,30 @@ async def test_anthropic_vision_e_chat_con_strumenti():
                 return {"ok": True}
 
             assert await llm.chat("sys", [{"role": "user", "text": "fatto"}], [TOOL], h) == "Registrato!"
+    finally:
+        await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_gemini_ripiega_se_il_modello_non_accetta_thinking_level():
+    seen = []
+
+    async def handler(req):
+        body = await req.json()
+        tc = body["generationConfig"].get("thinkingConfig")
+        seen.append(tc)
+        if tc and "thinkingLevel" in tc:
+            return web.json_response({"error": {"message": "thinking_level is not supported"}}, status=400)
+        return web.json_response({"candidates": [{"content": {"parts": [{"text": '{"risposta": "ok"}'}]}}]})
+
+    runner, base = await serve(handler)
+    try:
+        async with aiohttp.ClientSession() as s:
+            llm = GeminiLLM(s, "k", "m")
+            llm.URL = base + "/{model}"
+            schema = {"type": "object", "properties": {"risposta": {"type": "string"}}}
+            assert await llm.vision_json("sys", "p", [b"img"], schema) == {"risposta": "ok"}
+            assert await llm.vision_json("sys", "p", [b"img"], schema) == {"risposta": "ok"}
+            assert seen == [{"thinkingLevel": "low"}, {"thinkingBudget": 0}, {"thinkingBudget": 0}]
     finally:
         await runner.cleanup()
