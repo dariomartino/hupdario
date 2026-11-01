@@ -1,0 +1,88 @@
+name: Hup locale
+version: "0.1.0"
+slug: hup_locale
+description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
+url: https://github.com/OWNER/REPO
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: application
+boot: auto
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:robot-happy
+panel_title: Hup
+options:
+  llm_provider: gemini
+  gemini_api_key: ""
+  gemini_model: gemini-flash-latest
+  anthropic_api_key: ""
+  anthropic_model: claude-sonnet-5-5
+  assistant_name: Hup
+  personality: Amichevole, diretto e un po' ironico. Mai pedante, mai più di due frasi alla volta.
+  person_entity: person.dario
+  sleep_entity: input_boolean.hup_dormo
+  quiet_hours_start: "23:30"
+  quiet_hours_end: "07:00"
+  timezone: Europe/Rome
+  rooms:
+    - name: Cucina
+      camera: camera.cucina
+      motion: binary_sensor.motion_cucina_xiaomi_occupancy
+      goal: >-
+        Cucina in ordine e pulita: piani di lavoro e tavolo liberi, niente piatti o pentole
+        sporche fuori dalla lavastoviglie o dal lavello, niente cibo lasciato fuori dal frigo,
+        spazzatura non traboccante.
+  satellites:
+    - entity: assist_satellite.vaca_a6e7e87e1
+      motion:
+        - binary_sensor.motion_letto_dx_occupancy
+        - binary_sensor.motion_letto_sx_occupancy
+  feedback_script: script.hup_risposta
+  notify_service: notify.mobile_app_xiaomi_15t_pro
+  telegram_bot_token: ""
+  telegram_chat_id: ""
+  check_interval_minutes: 30
+  min_minutes_between_checks: 10
+  motion_cleared_minutes: 3
+  reminder_minutes: 30
+  postpone_minutes: 60
+  max_reminders: 3
+  voice_presence_minutes: 10
+  voice_reply_timeout_minutes: 3
+schema:
+  llm_provider: list(gemini|anthropic)
+  gemini_api_key: password?
+  gemini_model: str
+  anthropic_api_key: password?
+  anthropic_model: str
+  assistant_name: str
+  personality: str
+  person_entity: str
+  sleep_entity: str?
+  quiet_hours_start: str
+  quiet_hours_end: str
+  timezone: str
+  rooms:
+    - name: str
+      camera: str
+      motion: str?
+      goal: str
+  satellites:
+    - entity: str
+      motion:
+        - str
+  feedback_script: str
+  notify_service: str?
+  telegram_bot_token: password?
+  telegram_chat_id: str?
+  check_interval_minutes: int(5,600)
+  min_minutes_between_checks: int(1,120)
+  motion_cleared_minutes: int(0,60)
+  reminder_minutes: int(5,600)
+  postpone_minutes: int(5,600)
+  max_reminders: int(0,10)
+  voice_presence_minutes: int(1,120)
+  voice_reply_timeout_minutes: int(1,30)
