@@ -2,7 +2,7 @@ name: Hup locale
 version: "0.1.0"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
-url: https://github.com/OWNER/REPO
+url: https://github.com/dariomartino/hupdario
 arch:
   - aarch64
   - amd64
@@ -24,6 +24,7 @@ options:
   personality: Amichevole, diretto e un po' ironico. Mai pedante, mai più di due frasi alla volta.
   person_entity: person.dario
   sleep_entity: input_boolean.hup_dormo
+  privacy_entity: input_boolean.telecamere_in_privacy
   quiet_hours_start: "23:30"
   quiet_hours_end: "07:00"
   timezone: Europe/Rome
@@ -35,11 +36,36 @@ options:
         Cucina in ordine e pulita: piani di lavoro e tavolo liberi, niente piatti o pentole
         sporche fuori dalla lavastoviglie o dal lavello, niente cibo lasciato fuori dal frigo,
         spazzatura non traboccante.
+    - name: Ingresso
+      camera: camera.ingresso
+      motion: binary_sensor.motion_ingresso_occupancy
+      goal: >-
+        Ingresso libero e ordinato: scarpe nella scarpiera o allineate, giacche appese,
+        niente borse, pacchi o oggetti lasciati per terra o sul mobile.
+    - name: Camera da letto
+      camera: camera.letto
+      motion: binary_sensor.motion_letto_dx_occupancy
+      goal: >-
+        Camera da letto in ordine: letto rifatto dopo che mi sono alzato, vestiti nell'armadio
+        o nel cesto, comodini sgombri, niente tazze o bicchieri lasciati in giro.
+    - name: Stanza degli ospiti
+      camera: camera.ospiti
+      goal: >-
+        Stanza degli ospiti ordinata e pronta: niente oggetti accumulati su letto, sedie o
+        pavimento, non deve diventare un ripostiglio.
+    - name: Studio
+      camera: camera.studio
+      goal: >-
+        Studio ordinato: scrivania sgombra a fine giornata, cavi e attrezzi riposti, niente
+        tazze o piatti dimenticati, carte in pila o archiviate.
   satellites:
     - entity: assist_satellite.vaca_a6e7e87e1
       motion:
         - binary_sensor.motion_letto_dx_occupancy
         - binary_sensor.motion_letto_sx_occupancy
+    - entity: assist_satellite.home_assistant_voice_09a614_assist_satellite
+      motion:
+        - binary_sensor.motion_sala_xiaomi_occupancy
   feedback_script: script.hup_risposta
   notify_service: notify.mobile_app_xiaomi_15t_pro
   telegram_bot_token: ""
@@ -50,6 +76,7 @@ options:
   reminder_minutes: 30
   postpone_minutes: 60
   max_reminders: 3
+  max_open_tasks: 2
   voice_presence_minutes: 10
   voice_reply_timeout_minutes: 3
 schema:
@@ -62,6 +89,7 @@ schema:
   personality: str
   person_entity: str
   sleep_entity: str?
+  privacy_entity: str?
   quiet_hours_start: str
   quiet_hours_end: str
   timezone: str
@@ -84,5 +112,6 @@ schema:
   reminder_minutes: int(5,600)
   postpone_minutes: int(5,600)
   max_reminders: int(0,10)
+  max_open_tasks: int(1,10)
   voice_presence_minutes: int(1,120)
   voice_reply_timeout_minutes: int(1,30)

@@ -23,8 +23,12 @@ Già creati durante la configurazione:
 
 - `script.hup_risposta` (*Hup · Registra risposta*), esposto ad Assist: l'AI della conversazione
   vocale lo usa per passare la tua risposta all'app.
-- `input_boolean.hup_dormo` e l'automazione *🤖 Hup · Stato sonno*: si accende con il Buonanotte,
-  si spegne al primo movimento in cucina del mattino.
+- `input_boolean.hup_dormo` (*Hup · Dormo*): quando è acceso l'assistente non parla. L'automazione
+  *🤖 Hup · Stato sonno* lo spegne al primo movimento in cucina del mattino (o alle 12).
+- `input_boolean.telecamere_in_privacy` (*Telecamere in privacy*) e l'automazione
+  *🔒 Sicurezza · Privacy telecamere*: le telecamere restano sempre accese, tranne in privacy, che
+  le spegne dalla presa. La privacy si attiva da sola con *Ospiti in casa*; puoi attivarla anche a
+  voce ("attiva privacy telecamere") o scrivendolo al bot. In privacy l'assistente si mette in pausa.
 - La pipeline del satellite vocale deve usare un agente di conversazione con AI (es. Google AI
   Conversation) con il controllo di Home Assistant attivo (API *Assist*).
 
@@ -49,6 +53,8 @@ Già creati durante la configurazione:
 | `rooms` | Stanze da seguire: nome, telecamera, sensore di movimento, obiettivo in linguaggio naturale |
 | `satellites` | Satelliti vocali e i sensori di movimento che dicono se sei lì vicino |
 | `check_interval_minutes` | Ogni quanto ricontrollare una stanza (se è cambiata) |
+| `max_open_tasks` | Quanti compiti al massimo possono essere aperti in tutta la casa |
+| `privacy_entity` | L'interruttore che mette in pausa l'assistente e le telecamere |
 | `reminder_minutes` / `postpone_minutes` | Attesa prima di un promemoria / dopo un "dopo" |
 | `quiet_hours_start` / `quiet_hours_end` | Fascia in cui l'assistente non parla mai |
 | `personality` | Il carattere dell'assistente |

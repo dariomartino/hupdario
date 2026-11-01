@@ -71,11 +71,19 @@ class Brain:
     async def availability(self) -> tuple[bool, str]:
         if await self.ha.state(self.cfg.person_entity) != "home":
             return False, "fuori casa"
+        if await self.privacy_on():
+            return False, "ha messo le telecamere in privacy"
         if self.cfg.sleep_entity and await self.ha.state(self.cfg.sleep_entity) == "on":
             return False, "sta dormendo"
         if self.in_quiet_hours():
             return False, "fascia di silenzio"
         return True, "in casa e sveglio"
+
+    async def privacy_on(self) -> bool:
+        return bool(self.cfg.privacy_entity) and await self.ha.state(self.cfg.privacy_entity) == "on"
+
+    async def camera_ok(self, room: Room) -> bool:
+        return await self.ha.state(room.camera) not in (None, "unavailable", "unknown")
 
     def goal(self, room: Room) -> str:
         return self.mem.goal(room.name, room.goal)
@@ -97,6 +105,8 @@ class Brain:
             self.mem.set("last_unavailable_reason", None)
             self.mem.log("pausa", "Di nuovo attivo")
         for room in self.cfg.rooms:
+            if not await self.camera_ok(room):
+                continue
             due_tasks = [t for t in self.mem.open_tasks(room.name)
                          if t.next_action_at <= now and t.id not in self._voice_wait]
             since_last = now - self._last_check(room.name)
@@ -128,13 +138,18 @@ class Brain:
 
     async def _check_room(self, room: Room, reason: str, force: bool) -> dict:
         now = self.clock()
+        open_tasks = self.mem.open_tasks(room.name)
+        allow_new = force or len(self.mem.open_tasks()) < self.cfg.max_open_tasks
+        if not open_tasks and not allow_new:
+            # Ci sono già abbastanza compiti aperti in casa: non serve nemmeno guardare.
+            self.mem.set(f"last_check:{room.name}", now)
+            return {"esito": "in_attesa", "dettaglio": "troppi compiti già aperti in casa"}
         try:
             img = await self.ha.camera_snapshot(room.camera)
         except Exception as exc:  # noqa: BLE001
             self.mem.log("errore", f"Snapshot non riuscito ({exc})", room.name)
             self.mem.set(f"last_check:{room.name}", now)
             return {"esito": "errore", "dettaglio": "snapshot non riuscito"}
-        open_tasks = self.mem.open_tasks(room.name)
         fp = thumb(img)
         diff = thumb_diff(self.mem.get(f"thumb:{room.name}"), fp)
         self.mem.set(f"last_check:{room.name}", now)
@@ -172,7 +187,7 @@ class Brain:
                 await self._remind(task, v.get("messaggio") or f"Ti ricordo: {task.text}")
 
         new = result.get("nuovo_compito") or {}
-        if not open_tasks and new.get("presente") and new.get("compito"):
+        if not open_tasks and allow_new and new.get("presente") and new.get("compito"):
             task = self.mem.add_task(room.name, new["compito"], now + self.cfg.reminder_minutes * 60)
             self.mem.log("nuovo", task.text, room.name)
             await self._say(task, new.get("messaggio") or task.text, interactive=True)
@@ -368,12 +383,27 @@ class Brain:
         Tool("imposta_obiettivo", "Cambia l'obiettivo di Dario per una stanza.",
              {"type": "object", "properties": {"stanza": {"type": "string"}, "obiettivo": {"type": "string"}},
               "required": ["stanza", "obiettivo"]}),
+        Tool("imposta_privacy", "Mette le telecamere in privacy (le spegne, es. arrivano ospiti) o le riattiva.",
+             {"type": "object", "properties": {"attiva": {"type": "boolean",
+                                                          "description": "true = privacy (telecamere spente)"}},
+              "required": ["attiva"]}),
     ]
 
     async def _tool(self, name: str, args: dict, source: str):
         room = self.cfg.room(str(args.get("stanza", ""))) if "stanza" in args else None
         if "stanza" in args and not room:
             return {"errore": f"Stanza sconosciuta. Stanze disponibili: {[r.name for r in self.cfg.rooms]}"}
+        if name == "imposta_privacy":
+            if not self.cfg.privacy_entity:
+                return {"errore": "privacy_entity non configurato"}
+            service = "turn_on" if args.get("attiva") else "turn_off"
+            await self.ha.call_service("input_boolean", service, {"entity_id": self.cfg.privacy_entity})
+            self.mem.log("privacy", "Telecamere in privacy" if args.get("attiva") else "Telecamere riattivate")
+            return {"ok": True, "privacy": bool(args.get("attiva"))}
+        if name in ("guarda_stanza", "controlla_stanza") and await self.privacy_on():
+            return {"errore": "Le telecamere sono in privacy: non posso guardare finché Dario non la toglie."}
+        if name in ("guarda_stanza", "controlla_stanza") and not await self.camera_ok(room):
+            return {"errore": f"La telecamera di {room.name} non è raggiungibile in questo momento."}
         if name == "guarda_stanza":
             img = await self.ha.camera_snapshot(room.camera)
             res = await self.llm.vision_json(

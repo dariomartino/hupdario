@@ -33,6 +33,7 @@ class Config:
     personality: str
     person_entity: str
     sleep_entity: str | None
+    privacy_entity: str | None
     quiet_start: time
     quiet_end: time
     tz: ZoneInfo
@@ -48,6 +49,7 @@ class Config:
     reminder_minutes: int
     postpone_minutes: int
     max_reminders: int
+    max_open_tasks: int
     voice_presence_minutes: int
     voice_reply_timeout_minutes: int
     data_dir: str = "/data"
@@ -88,6 +90,7 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         personality=o.get("personality", "Amichevole e diretto."),
         person_entity=o.get("person_entity", "person.dario"),
         sleep_entity=o.get("sleep_entity") or None,
+        privacy_entity=o.get("privacy_entity") or None,
         quiet_start=_parse_time(o.get("quiet_hours_start", "23:30")),
         quiet_end=_parse_time(o.get("quiet_hours_end", "07:00")),
         tz=ZoneInfo(o.get("timezone", "Europe/Rome")),
@@ -103,6 +106,7 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         reminder_minutes=int(o.get("reminder_minutes", 30)),
         postpone_minutes=int(o.get("postpone_minutes", 60)),
         max_reminders=int(o.get("max_reminders", 3)),
+        max_open_tasks=int(o.get("max_open_tasks", 2)),
         voice_presence_minutes=int(o.get("voice_presence_minutes", 10)),
         voice_reply_timeout_minutes=int(o.get("voice_reply_timeout_minutes", 3)),
         data_dir=data_dir,

@@ -19,9 +19,11 @@ from app import prompts  # noqa: E402
 OPTIONS = {
     "llm_provider": "gemini", "gemini_api_key": "x",
     "person_entity": "person.dario", "sleep_entity": "input_boolean.hup_dormo",
+    "privacy_entity": "input_boolean.privacy", "max_open_tasks": 1,
     "quiet_hours_start": "23:30", "quiet_hours_end": "07:00", "timezone": "Europe/Rome",
     "rooms": [{"name": "Cucina", "camera": "camera.cucina", "motion": "binary_sensor.motion_cucina",
-               "goal": "Cucina in ordine"}],
+               "goal": "Cucina in ordine"},
+              {"name": "Studio", "camera": "camera.studio", "goal": "Studio in ordine"}],
     "satellites": [{"entity": "assist_satellite.letto", "motion": ["binary_sensor.motion_letto"]}],
     "feedback_script": "script.hup_risposta", "notify_service": "notify.mobile_app_tel",
     "check_interval_minutes": 30, "min_minutes_between_checks": 10, "motion_cleared_minutes": 3,
@@ -52,7 +54,8 @@ class FakeHA:
         self.clock = clock
         self.states = {"person.dario": "home", "input_boolean.hup_dormo": "off",
                        "assist_satellite.letto": "idle", "binary_sensor.motion_letto": "off",
-                       "binary_sensor.motion_cucina": "off"}
+                       "binary_sensor.motion_cucina": "off", "input_boolean.privacy": "off",
+                       "camera.cucina": "idle", "camera.studio": "unavailable"}
         self.changed = {"binary_sensor.motion_letto": 0}
         self.calls = []
         self.image = jpeg((200, 200, 200))
@@ -284,3 +287,30 @@ def test_schema_gemini():
     s = _to_gemini_schema(prompts.CHECK_SCHEMA)
     assert s["type"] == "OBJECT"
     assert s["properties"]["verifiche"]["items"]["properties"]["completato"]["type"] == "BOOLEAN"
+
+
+@pytest.mark.asyncio
+async def test_privacy_mette_in_pausa_e_blocca_la_chat(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["input_boolean.privacy"] = "on"
+    await brain.tick()
+    assert llm.prompts == []
+    res = await brain._tool("guarda_stanza", {"stanza": "Cucina", "domanda": "?"}, "telegram")
+    assert "privacy" in res["errore"]
+    await brain._tool("imposta_privacy", {"attiva": False}, "telegram")
+    assert ha.calls[-1] == ("input_boolean", "turn_off", {"entity_id": "input_boolean.privacy"})
+
+
+@pytest.mark.asyncio
+async def test_telecamera_spenta_saltata_e_limite_compiti_in_casa(env):
+    brain, ha, llm, mem, clock = env
+    llm.vision_results = [nuovo()]
+    await brain.tick()  # lo studio ha la telecamera non disponibile: solo la cucina
+    assert len(llm.prompts) == 1 and len(mem.open_tasks()) == 1
+    ha.states["camera.studio"] = "idle"
+    clock.advance(11)
+    await brain.tick()  # c'è già 1 compito aperto in casa (limite 1): lo studio non viene analizzato
+    assert len(llm.prompts) == 1
+    llm.vision_results = [tutto_ok()]  # se lo chiedo io, guarda comunque
+    await brain.check_room(brain.cfg.room("studio"), "richiesta", force=True)
+    assert len(llm.prompts) == 2
