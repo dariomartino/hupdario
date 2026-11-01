@@ -168,9 +168,15 @@ class Brain:
             self.mem.set(f"last_check:{room.name}", now)
             return {"esito": "in_attesa", "dettaglio": "troppi compiti già aperti in casa"}
         log.info("Guardo %s (%s)", room.name, reason)
-        try:
-            img = await self.ha.camera_snapshot(room.camera)
-        except Exception as exc:  # noqa: BLE001
+        img, exc = None, None
+        for attempt in range(3):  # le telecamere RTSP a volte non danno subito il fotogramma
+            try:
+                img = await self.ha.camera_snapshot(room.camera)
+                break
+            except Exception as e:  # noqa: BLE001
+                exc = e
+                await asyncio.sleep(3 * (attempt + 1))
+        if img is None:
             self.mem.log("errore", f"Snapshot non riuscito ({exc})", room.name)
             self.mem.set(f"last_check:{room.name}", now)
             return {"esito": "errore", "dettaglio": "snapshot non riuscito"}
@@ -490,9 +496,13 @@ class Brain:
             if not room:
                 return
             res = await self.check_room(room, "comando", force=True)
-            if d.get("annuncia") and res.get("esito") == "ok" and not res.get("compiti_aperti"):
-                where = await self.locate()
+            msg = None
+            if res.get("esito") == "ok" and not res.get("compiti_aperti"):
                 msg = f"Ho dato un'occhiata: {room.name} è in ordine."
+            elif res.get("esito") == "errore":
+                msg = f"Non riesco a vedere dalla telecamera di {room.name}, riprovo più tardi."
+            if d.get("annuncia") and msg:
+                where = await self.locate()
                 if where and where[0] == "satellite":
                     await self._fire("assist_satellite", "announce",
                                      {"entity_id": where[1], "message": msg, "preannounce": True})
