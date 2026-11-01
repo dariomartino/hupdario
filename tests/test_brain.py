@@ -395,3 +395,20 @@ async def test_comandi_annulla_e_controlla_con_annuncio(env):
     await settle()
     assert ha.calls[-1][:2] == ("assist_satellite", "announce")
     assert brain.speaker_options() == ["Automatico", "Solo telefono", "Echo salotto", "View Assist"]
+
+
+@pytest.mark.asyncio
+async def test_si_lo_faccio_ricontrolla_dopo_dieci_minuti_senza_insistere(env):
+    brain, ha, llm, mem, clock = env
+    llm.vision_results = [nuovo()]
+    await brain.tick()
+    task = mem.open_tasks()[0]
+    await brain.feedback(task.id, "lo_faccio", "sì", "voce")
+    assert mem.task(task.id).status == "aperto"
+    clock.advance(9)
+    await brain.tick()
+    assert len(llm.prompts) == 1  # non ancora
+    clock.advance(2)
+    llm.vision_results = [tutto_ok([{"task_id": task.id, "completato": True, "messaggio": "Ottimo"}])]
+    await brain.tick()
+    assert mem.task(task.id).status == "fatto"

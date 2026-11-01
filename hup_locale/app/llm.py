@@ -63,11 +63,13 @@ class GeminiLLM(LLM):
     # thinkingLevel, i 2.5 thinkingBudget: provo nell'ordine e ricordo quello accettato.
     THINKING = [{"thinkingLevel": "low"}, {"thinkingBudget": 0}, None]
 
-    def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str, vision_model: str | None = None):
         self.session, self.key, self.model = session, api_key, model
+        self.vision_model = vision_model or model
         self._thinking = 0
 
-    async def _post(self, body: dict) -> dict:
+    async def _post(self, body: dict, model: str | None = None) -> dict:
+        model = model or self.model
         while True:
             thinking = self.THINKING[self._thinking]
             payload = dict(body)
@@ -77,7 +79,7 @@ class GeminiLLM(LLM):
             if gen:
                 payload["generationConfig"] = gen
             async with self.session.post(
-                self.URL.format(model=self.model),
+                self.URL.format(model=model),
                 headers={"x-goog-api-key": self.key, "Content-Type": "application/json"},
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=120),
@@ -111,7 +113,15 @@ class GeminiLLM(LLM):
                 "temperature": 0.4,
             },
         }
-        content = self._content(await self._post(body))
+        try:
+            data = await self._post(body, self.vision_model)
+        except LLMError as exc:
+            if self.vision_model == self.model or " 404" not in f" {exc}":
+                raise
+            log.warning("Modello %s non disponibile, uso %s", self.vision_model, self.model)
+            self.vision_model = self.model
+            data = await self._post(body, self.model)
+        content = self._content(data)
         text = "".join(p.get("text", "") for p in content.get("parts", []))
         return json.loads(text)
 
@@ -210,4 +220,4 @@ def make_llm(session: aiohttp.ClientSession, cfg) -> LLM:
         return AnthropicLLM(session, cfg.anthropic_api_key, cfg.anthropic_model)
     if not cfg.gemini_api_key:
         raise LLMError("Manca gemini_api_key nelle opzioni")
-    return GeminiLLM(session, cfg.gemini_api_key, cfg.gemini_model)
+    return GeminiLLM(session, cfg.gemini_api_key, cfg.gemini_model, cfg.gemini_vision_model)

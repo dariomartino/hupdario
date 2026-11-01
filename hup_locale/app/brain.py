@@ -17,7 +17,9 @@ from .memory import Memory, Task
 
 log = logging.getLogger("hup.brain")
 
-ESITI = ("fatto", "dopo", "non_serve", "altro")
+ESITI = ("fatto", "lo_faccio", "dopo", "non_serve", "altro")
+# Dopo un "sì, lo faccio" ricontrollo con la telecamera dopo questo tempo, senza insistere prima.
+DOING_CHECK_MINUTES = 10
 # Differenza media (0-255) sotto la quale la stanza si considera invariata dall'ultimo controllo.
 SAME_SCENE_THRESHOLD = 6.0
 
@@ -441,7 +443,9 @@ class Brain:
         self._voice_wait.pop(task.id, None)
         now = self.clock()
         nota = (nota or "").strip()
-        if esito == "fatto":
+        if esito == "lo_faccio":
+            self.mem.update_task(task.id, next_action_at=now + DOING_CHECK_MINUTES * 60, note=nota or task.note)
+        elif esito == "fatto":
             self.mem.update_task(task.id, status="da_verificare", next_action_at=now + 90, note=nota or None)
         elif esito == "dopo":
             self.mem.update_task(task.id, next_action_at=now + self.cfg.postpone_minutes * 60,

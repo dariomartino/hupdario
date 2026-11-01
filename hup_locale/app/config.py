@@ -35,6 +35,7 @@ class Config:
     llm_provider: str
     gemini_api_key: str
     gemini_model: str
+    gemini_vision_model: str
     anthropic_api_key: str
     anthropic_model: str
     assistant_name: str
@@ -139,6 +140,7 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         llm_provider=o.get("llm_provider", "gemini"),
         gemini_api_key=o.get("gemini_api_key", "") or "",
         gemini_model=o.get("gemini_model", "gemini-flash-latest"),
+        gemini_vision_model=o.get("gemini_vision_model") or "gemini-flash-lite-latest",
         anthropic_api_key=o.get("anthropic_api_key", "") or "",
         anthropic_model=o.get("anthropic_model", "claude-sonnet-5-5"),
         assistant_name=o.get("assistant_name", "Hup"),

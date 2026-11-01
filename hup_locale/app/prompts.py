@@ -91,10 +91,12 @@ def voice_context(name: str, personality: str, task_id: str, room: str, task_tex
         f"Hai appena detto a Dario: \"{said}\"\n"
         f"Si tratta del compito di Hup con task_id {task_id} nella stanza {room}: {task_text}.\n"
         f"Quando Dario risponde, chiama SEMPRE lo strumento '{script_name}' con task_id \"{task_id}\" e "
-        "l'esito giusto: 'fatto' se dice che l'ha fatto, 'dopo' se lo farà più tardi, 'non_serve' se dice "
-        "che va bene così o che quella cosa deve stare lì, 'altro' per tutto il resto. Nella nota riporta in "
+        "l'esito giusto: 'fatto' SOLO se dice di averlo già fatto; 'lo_faccio' se accetta di farlo adesso "
+        "(sì, ok, va bene, ci penso io, ora lo faccio); 'dopo' se lo farà più tardi; 'non_serve' se dice "
+        "che va bene così o che quella cosa deve stare lì; 'altro' per tutto il resto. Nella nota riporta in "
         "breve le sue parole.\n"
-        "Poi rispondi con UNA sola frase breve e naturale. Se dice dopo, accetta senza insistere. Se dice che "
+        "Poi rispondi con UNA sola frase breve e naturale. Se accetta di farlo, digli che tra un po' ricontrolli. "
+        "Se dice dopo, accetta senza insistere. Se dice che "
         "va bene così, ringrazialo e digli che te lo ricorderai. Non fare altre domande."
     )
 

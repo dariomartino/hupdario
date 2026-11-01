@@ -116,3 +116,26 @@ async def test_gemini_ripiega_se_il_modello_non_accetta_thinking_level():
             assert seen == [{"thinkingLevel": "low"}, {"thinkingBudget": 0}, {"thinkingBudget": 0}]
     finally:
         await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_gemini_modello_visione_inesistente_ripiega_sul_principale():
+    models = []
+
+    async def handler(req):
+        models.append(req.match_info["tail"])
+        if "lite" in req.match_info["tail"]:
+            return web.json_response({"error": {"message": "model not found"}}, status=404)
+        return web.json_response({"candidates": [{"content": {"parts": [{"text": '{"risposta": "ok"}'}]}}]})
+
+    runner, base = await serve(handler)
+    try:
+        async with aiohttp.ClientSession() as s:
+            llm = GeminiLLM(s, "k", "main", "lite")
+            llm.URL = base + "/{model}"
+            schema = {"type": "object", "properties": {"risposta": {"type": "string"}}}
+            assert await llm.vision_json("sys", "p", [b"img"], schema) == {"risposta": "ok"}
+            assert await llm.vision_json("sys", "p", [b"img"], schema) == {"risposta": "ok"}
+            assert models == ["lite", "main", "main"]
+    finally:
+        await runner.cleanup()
