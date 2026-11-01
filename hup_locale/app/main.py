@@ -31,6 +31,8 @@ async def main() -> None:
         ha.on("state_changed", brain.on_state_changed)
         ha.on("hup_feedback", brain.on_feedback_event)
         ha.on("mobile_app_notification_action", brain.on_notification_action)
+        ha.on("hup_command", brain.on_command)
+        await brain.sync_speaker_select()
 
         tasks = [asyncio.create_task(ha.run_events()), asyncio.create_task(brain.run())]
 

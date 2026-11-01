@@ -1,5 +1,5 @@
 name: Hup locale
-version: "0.2.0"
+version: "0.3.0"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
 url: https://github.com/dariomartino/hupdario
@@ -73,6 +73,20 @@ options:
   feedback_script: script.hup_risposta
   notify_service: notify.mobile_app_xiaomi_15t_pro
   tts_entity: tts.google_ai_tts
+  speaker_select: input_select.hup_altoparlante_avvisi
+  speakers:
+    - name: View Assist camera da letto
+      entity: assist_satellite.vaca_a6e7e87e1
+    - name: Nest cucina
+      entity: media_player.nestmini6311_2
+    - name: Echo studio
+      entity: notify.alexa_media_echo_studio
+    - name: Echo Show ospiti
+      entity: notify.alexa_media_echo_show_ospiti
+    - name: Echo salotto
+      entity: notify.alexa_media_echo_salotto
+    - name: HA Voice soggiorno
+      entity: assist_satellite.home_assistant_voice_09a614_assist_satellite
   telegram_bot_token: ""
   telegram_chat_id: ""
   check_interval_minutes: 30
@@ -112,6 +126,10 @@ schema:
   feedback_script: str
   notify_service: str?
   tts_entity: str
+  speaker_select: str?
+  speakers:
+    - name: str
+      entity: str
   telegram_bot_token: password?
   telegram_chat_id: str?
   check_interval_minutes: int(5,600)

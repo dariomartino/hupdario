@@ -259,8 +259,40 @@ class Brain:
             return True  # i servizi notify non hanno stato: in caso di errore ripiego sull'app
         return await self.ha.state(entity) not in (None, "unavailable", "unknown")
 
+    AUTO, PHONE_ONLY = "Automatico", "Solo telefono"
+
+    def speaker_options(self) -> list[str]:
+        return [self.AUTO, self.PHONE_ONLY] + [s.name for s in self.cfg.speakers]
+
+    async def sync_speaker_select(self) -> None:
+        """Tiene allineate le voci del selettore in Home Assistant con gli altoparlanti configurati."""
+        if not self.cfg.speaker_select:
+            return
+        try:
+            await self.ha.call_service("input_select", "set_options", {
+                "entity_id": self.cfg.speaker_select, "options": self.speaker_options()})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Selettore altoparlante non aggiornato: %s", exc)
+
+    @staticmethod
+    def _kind(entity: str) -> str:
+        return "satellite" if entity.startswith("assist_satellite.") else "speaker"
+
     async def locate(self) -> tuple[str, str] | None:
-        """Dove parlare a Dario: ("satellite", entità) o ("speaker", entità), in base a dove si trova."""
+        """Dove parlare a Dario: ("satellite", entità) o ("speaker", entità).
+
+        Se nel selettore ha scelto un altoparlante preciso, uso quello; altrimenti lo cerco io.
+        """
+        if self.cfg.speaker_select:
+            choice = await self.ha.state(self.cfg.speaker_select)
+            if choice == self.PHONE_ONLY:
+                return None
+            chosen = next((s for s in self.cfg.speakers if s.name == choice), None)
+            if chosen and await self._usable(chosen.entity):
+                return self._kind(chosen.entity), chosen.entity
+        return await self._locate_auto()
+
+    async def _locate_auto(self) -> tuple[str, str] | None:
         candidates: list[tuple[float, str, str]] = []
         for sat in self.cfg.satellites:
             for sensor in sat.motion:
@@ -431,6 +463,35 @@ class Brain:
                                  {"title": self.cfg.assistant_name, "message": answer,
                                   "data": {"tag": "hup_chat", "group": "hup"}})
 
+    async def cancel_tasks(self, room: str | None = None) -> int:
+        tasks = self.mem.open_tasks(self.cfg.room(room).name if room and self.cfg.room(room) else None)
+        for t in tasks:
+            self.mem.update_task(t.id, status="annullato", next_action_at=self.clock())
+            self._voice_wait.pop(t.id, None)
+        if tasks:
+            self.mem.log("annullati", f"Annullati {len(tasks)} compiti", room)
+        return len(tasks)
+
+    async def on_command(self, event: dict) -> None:
+        """Comandi da Home Assistant (evento hup_command): annulla_compiti, controlla."""
+        d = event.get("data", {})
+        cmd = d.get("command")
+        if cmd == "annulla_compiti":
+            await self.cancel_tasks(d.get("stanza"))
+        elif cmd == "controlla":
+            room = self.cfg.room(str(d.get("stanza", "")))
+            if not room:
+                return
+            res = await self.check_room(room, "comando", force=True)
+            if d.get("annuncia") and res.get("esito") == "ok" and not res.get("compiti_aperti"):
+                where = await self.locate()
+                msg = f"Ho dato un'occhiata: {room.name} è in ordine."
+                if where and where[0] == "satellite":
+                    await self._fire("assist_satellite", "announce",
+                                     {"entity_id": where[1], "message": msg, "preannounce": True})
+                elif where:
+                    await self._speak(where[1], msg)
+
     async def on_state_changed(self, event: dict) -> None:
         d = event.get("data", {})
         entity = d.get("entity_id")
@@ -464,6 +525,9 @@ class Brain:
         Tool("imposta_obiettivo", "Cambia l'obiettivo di Dario per una stanza.",
              {"type": "object", "properties": {"stanza": {"type": "string"}, "obiettivo": {"type": "string"}},
               "required": ["stanza", "obiettivo"]}),
+        Tool("annulla_compiti", "Annulla i compiti aperti (di una stanza, o di tutta la casa se non indichi la "
+                                "stanza) senza salvarli come regole.",
+             {"type": "object", "properties": {"stanza": {"type": "string"}}}),
         Tool("imposta_privacy", "Mette le telecamere in privacy (le spegne, es. arrivano ospiti) o le riattiva.",
              {"type": "object", "properties": {"attiva": {"type": "boolean",
                                                           "description": "true = privacy (telecamere spente)"}},
@@ -474,6 +538,8 @@ class Brain:
         room = self.cfg.room(str(args.get("stanza", ""))) if "stanza" in args else None
         if "stanza" in args and not room:
             return {"errore": f"Stanza sconosciuta. Stanze disponibili: {[r.name for r in self.cfg.rooms]}"}
+        if name == "annulla_compiti":
+            return {"annullati": await self.cancel_tasks(room.name if room else None)}
         if name == "imposta_privacy":
             if not self.cfg.privacy_entity:
                 return {"errore": "privacy_entity non configurato"}

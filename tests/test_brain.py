@@ -28,6 +28,9 @@ OPTIONS = {
                "speaker": "notify.alexa_media_echo_studio"}],
     "satellites": [{"entity": "assist_satellite.letto", "motion": ["binary_sensor.motion_letto"]}],
     "feedback_script": "script.hup_risposta", "notify_service": "notify.mobile_app_tel",
+    "speaker_select": "input_select.altoparlante",
+    "speakers": [{"name": "Echo salotto", "entity": "notify.alexa_media_echo_salotto"},
+                 {"name": "View Assist", "entity": "assist_satellite.letto"}],
     "check_interval_minutes": 30, "min_minutes_between_checks": 10, "motion_cleared_minutes": 3,
     "reminder_minutes": 30, "postpone_minutes": 60, "max_reminders": 2,
     "voice_presence_minutes": 10, "voice_reply_timeout_minutes": 3,
@@ -58,7 +61,7 @@ class FakeHA:
                        "assist_satellite.letto": "idle", "binary_sensor.motion_letto": "off",
                        "binary_sensor.motion_cucina": "off", "input_boolean.privacy": "off",
                        "camera.cucina": "idle", "camera.studio": "unavailable",
-                       "media_player.nest_cucina": "idle"}
+                       "media_player.nest_cucina": "idle", "input_select.altoparlante": "Automatico"}
         self.changed = {"binary_sensor.motion_letto": 0}
         self.calls = []
         self.image = jpeg((200, 200, 200))
@@ -359,3 +362,36 @@ def test_stanze_salvate_ricevono_i_nuovi_campi_predefiniti():
     assert o["rooms"][0]["speaker"] == "notify.alexa_media_echo_studio"
     assert o["rooms"][1]["speaker"] is None
     assert o["rooms"][1]["motion"] == "binary_sensor.motion_cucina_xiaomi_occupancy"
+
+
+@pytest.mark.asyncio
+async def test_altoparlante_scelto_e_solo_telefono(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["binary_sensor.motion_cucina"] = "on"  # in automatico userebbe il Nest
+    ha.states["input_select.altoparlante"] = "Echo salotto"
+    llm.vision_results = [nuovo()]
+    await brain.tick()
+    assert ha.names() == ["notify.alexa_media_echo_salotto", "notify.mobile_app_tel"]
+    await brain.cancel_tasks()
+    ha.states["input_select.altoparlante"] = "Solo telefono"
+    ha.image = jpeg((5, 5, 200))
+    clock.advance(31)
+    n = len(ha.calls)
+    llm.vision_results = [nuovo("Altro")]
+    await brain.tick()
+    assert ha.names()[n:] == ["notify.mobile_app_tel"]
+
+
+@pytest.mark.asyncio
+async def test_comandi_annulla_e_controlla_con_annuncio(env):
+    brain, ha, llm, mem, clock = env
+    llm.vision_results = [nuovo()]
+    await brain.tick()
+    await brain.on_command({"data": {"command": "annulla_compiti"}})
+    assert mem.open_tasks() == [] and mem.rules() == []
+    ha.states["input_select.altoparlante"] = "View Assist"
+    llm.vision_results = [tutto_ok()]
+    await brain.on_command({"data": {"command": "controlla", "stanza": "cucina", "annuncia": True}})
+    await settle()
+    assert ha.calls[-1][:2] == ("assist_satellite", "announce")
+    assert brain.speaker_options() == ["Automatico", "Solo telefono", "Echo salotto", "View Assist"]

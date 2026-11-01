@@ -56,10 +56,18 @@ Già creati durante la configurazione:
 | `satellites` | Satelliti vocali e i sensori di movimento che dicono se sei lì vicino |
 | `check_interval_minutes` | Ogni quanto ricontrollare una stanza (se è cambiata) |
 | `max_open_tasks` | Quanti compiti al massimo possono essere aperti in tutta la casa |
+| `speakers` / `speaker_select` | Gli altoparlanti disponibili e il selettore *Hup · Altoparlante avvisi*: "Automatico" parla dove sei, "Solo telefono" solo notifiche, oppure scegli un altoparlante fisso |
 | `privacy_entity` | L'interruttore che mette in pausa l'assistente e le telecamere |
 | `reminder_minutes` / `postpone_minutes` | Attesa prima di un promemoria / dopo un "dopo" |
 | `quiet_hours_start` / `quiet_hours_end` | Fascia in cui l'assistente non parla mai |
 | `personality` | Il carattere dell'assistente |
+
+## Comandi da Home Assistant
+
+Lancia l'evento `hup_command` (per esempio da uno script o da Strumenti → Eventi):
+
+- `command: annulla_compiti` (con `stanza` facoltativa): annulla i compiti aperti senza salvarli come regole
+- `command: controlla`, `stanza: Cucina`, `annuncia: true`: controlla subito; se è tutto a posto lo dice
 
 ## Sviluppo
 

@@ -25,6 +25,12 @@ class Satellite:
 
 
 @dataclass
+class Speaker:
+    name: str
+    entity: str
+
+
+@dataclass
 class Config:
     llm_provider: str
     gemini_api_key: str
@@ -44,6 +50,8 @@ class Config:
     feedback_script: str
     notify_service: str | None
     tts_entity: str
+    speaker_select: str | None
+    speakers: list[Speaker]
     telegram_bot_token: str
     telegram_chat_id: str
     check_interval_minutes: int
@@ -84,6 +92,15 @@ def _shipped_rooms() -> dict[str, dict]:
         return {}
 
 
+def _shipped_option(key: str, default):
+    try:
+        import yaml  # noqa: PLC0415
+        with open(DEFAULTS_PATH, encoding="utf-8") as fh:
+            return yaml.safe_load(fh)["options"].get(key, default)
+    except Exception:  # noqa: BLE001
+        return default
+
+
 def fill_room_defaults(o: dict, shipped: dict[str, dict]) -> dict:
     """Completa le stanze salvate con i campi nuovi delle versioni successive (es. altoparlanti).
 
@@ -104,6 +121,10 @@ def load(path: str | None = None) -> Config:
     with open(path, encoding="utf-8") as fh:
         o = json.load(fh)
     o = fill_room_defaults(o, _shipped_rooms())
+    if not o.get("speakers"):
+        o["speakers"] = _shipped_option("speakers", [])
+    if "speaker_select" not in o:
+        o["speaker_select"] = _shipped_option("speaker_select", None)
     return from_dict(o, data_dir=os.environ.get("HUP_DATA_DIR", os.path.dirname(path) or "/data"))
 
 
@@ -133,6 +154,8 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         feedback_script=o.get("feedback_script", "script.hup_risposta"),
         notify_service=o.get("notify_service") or None,
         tts_entity=o.get("tts_entity", "tts.google_ai_tts"),
+        speaker_select=o.get("speaker_select") or None,
+        speakers=[Speaker(name=x["name"], entity=x["entity"]) for x in o.get("speakers", [])],
         telegram_bot_token=o.get("telegram_bot_token", "") or "",
         telegram_chat_id=str(o.get("telegram_chat_id", "") or ""),
         check_interval_minutes=int(o.get("check_interval_minutes", 30)),
