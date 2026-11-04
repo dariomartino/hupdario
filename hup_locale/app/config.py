@@ -43,6 +43,7 @@ class Config:
     person_entity: str
     sleep_entity: str | None
     privacy_entity: str | None
+    system_entity: str | None
     quiet_start: time
     quiet_end: time
     tz: ZoneInfo
@@ -150,6 +151,7 @@ def from_dict(o: dict, data_dir: str = "/data") -> Config:
         person_entity=o.get("person_entity", "person.dario"),
         sleep_entity=o.get("sleep_entity") or None,
         privacy_entity=o.get("privacy_entity") or None,
+        system_entity=o.get("system_entity", "input_boolean.pulizie_mode") or None,
         quiet_start=_parse_time(o.get("quiet_hours_start", "23:30")),
         quiet_end=_parse_time(o.get("quiet_hours_end", "07:00")),
         tz=ZoneInfo(o.get("timezone", "Europe/Rome")),

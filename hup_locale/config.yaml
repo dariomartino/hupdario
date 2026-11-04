@@ -1,5 +1,5 @@
 name: Hup locale
-version: "0.4.1"
+version: "0.4.2"
 slug: hup_locale
 description: Assistente proattivo che guarda le stanze, ti propone cosa sistemare e ne parla con te a voce, in chat o via notifica.
 url: https://github.com/dariomartino/hupdario
@@ -26,6 +26,7 @@ options:
   person_entity: person.dario
   sleep_entity: input_boolean.hup_dormo
   privacy_entity: input_boolean.telecamere_in_privacy
+  system_entity: input_boolean.pulizie_mode
   quiet_hours_start: "23:30"
   quiet_hours_end: "07:00"
   timezone: Europe/Rome
@@ -113,6 +114,7 @@ schema:
   person_entity: str
   sleep_entity: str?
   privacy_entity: str?
+  system_entity: str?
   quiet_hours_start: str
   quiet_hours_end: str
   timezone: str

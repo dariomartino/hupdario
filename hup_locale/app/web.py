@@ -56,7 +56,7 @@ def make_app(brain) -> web.Application:
     async def check(req: web.Request) -> web.Response:
         form = await req.post()
         room = brain.cfg.room(str(form.get("room", "")))
-        if room and not await brain.privacy_on() and await brain.camera_ok(room):
+        if room and await brain.system_on() and not await brain.privacy_on() and await brain.camera_ok(room):
             await brain.check_room(room, "pannello", force=True)
         raise web.HTTPSeeOther(location="./")
 

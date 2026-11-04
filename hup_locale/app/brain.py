@@ -85,6 +85,8 @@ class Brain:
     async def availability(self) -> tuple[bool, str]:
         if await self.ha.state(self.cfg.person_entity) != "home":
             return False, "fuori casa"
+        if not await self.system_on():
+            return False, "ha spento il sistema (Pulizie mode)"
         if await self.privacy_on():
             return False, "ha messo le telecamere in privacy"
         if self.cfg.sleep_entity and await self.ha.state(self.cfg.sleep_entity) == "on":
@@ -109,6 +111,12 @@ class Brain:
 
     async def max_open_tasks(self) -> int:
         return await self._number(self.cfg.max_tasks_entity, self.cfg.max_open_tasks)
+
+    async def system_on(self) -> bool:
+        """Interruttore generale (Pulizie mode): spento = telecamere spente e assistente fermo."""
+        if not self.cfg.system_entity:
+            return True
+        return await self.ha.state(self.cfg.system_entity) != "off"
 
     async def privacy_on(self) -> bool:
         return bool(self.cfg.privacy_entity) and await self.ha.state(self.cfg.privacy_entity) == "on"
@@ -585,6 +593,8 @@ class Brain:
             await self.ha.call_service("input_boolean", service, {"entity_id": self.cfg.privacy_entity})
             self.mem.log("privacy", "Telecamere in privacy" if args.get("attiva") else "Telecamere riattivate")
             return {"ok": True, "privacy": bool(args.get("attiva"))}
+        if name in ("guarda_stanza", "controlla_stanza") and not await self.system_on():
+            return {"errore": "Il sistema è spento (Pulizie mode): telecamere spente finché Dario non lo riaccende."}
         if name in ("guarda_stanza", "controlla_stanza") and await self.privacy_on():
             return {"errore": "Le telecamere sono in privacy: non posso guardare finché Dario non la toglie."}
         if name in ("guarda_stanza", "controlla_stanza") and not await self.camera_ok(room):

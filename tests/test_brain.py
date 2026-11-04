@@ -425,3 +425,17 @@ async def test_rimanda_e_limite_regolabili_da_home_assistant(env):
     task = mem.open_tasks()[0]
     await brain.feedback(task.id, "dopo")
     assert mem.task(task.id).next_action_at == clock() + 20 * 60
+
+
+@pytest.mark.asyncio
+async def test_pulizie_mode_spento_ferma_tutto(env):
+    brain, ha, llm, mem, clock = env
+    ha.states["input_boolean.pulizie_mode"] = "off"
+    await brain.tick()
+    assert llm.prompts == [] and ha.calls == []
+    res = await brain._tool("controlla_stanza", {"stanza": "Cucina"}, "telegram")
+    assert "Pulizie" in res["errore"]
+    ha.states["input_boolean.pulizie_mode"] = "on"
+    llm.vision_results = [tutto_ok()]
+    await brain.tick()
+    assert len(llm.prompts) == 1
